@@ -34,53 +34,88 @@ def handler(event, context):
   try:
     c = event['context']
     groups = c['groups']
-    
+
     if not is_admin(groups):
       return {
         'statusCode': 403,
-        'body': 'Unauthorized'
+        'body': 'Unauthorized HELLO'
       }
-  except:
+    org_name = event['org']
+    email = event['email']
+
+    with conn.cursor() as cur:
+      cur.execute(f'INSERT INTO `organizations` (`name`, max_users, max_concurrent_users, is_deleted) VALUES (\'{org_name}\', 50, 5, 0)')
+      org_id = cur.lastrowid
+      conn.commit()
+      cur.execute(f'SELECT id FROM signup_forms WHERE org_name=\'{org_name}\'')
+      row = cur.fetchone()
+      if row is not None:
+        signup_form_id = row[0]
+        cur.execute(f'DELETE FROM signup_forms WHERE id={signup_form_id}')
+
+      sql = 'INSERT INTO pending_users (email, org_id, cognitoed, `role`) VALUES (%s, %s, %s, %s)'
+      cur.execute(sql, (email, org_id, 0, 'OrgAdmin'))
+      conn.commit()
+
+    return {
+      'statusCode': 200
+    }
+  except Exception as e:
+    logger.error(e)
     return {
       'statusCode': 500,
       'body': 'Internal Server Error'
     }
+  # try:
+  #   c = event['context']
+  #   groups = c['groups']
+    
+  #   if not is_admin(groups):
+  #     return {
+  #       'statusCode': 403,
+  #       'body': 'Unauthorized'
+  #     }
+  # except:
+  #   return {
+  #     'statusCode': 500,
+  #     'body': 'Internal Server Error'
+  #   }
 
-  org_name = event['org']
-  email = event['email']
+  # org_name = event['org']
+  # email = event['email']
 
-  with conn.cursor() as cur:
-    cur.execute(f'INSERT INTO `organizations` (`name`, max_users, max_concurrent_users, is_deleted) VALUES (\'{org_name}\', 50, 5, 0)')
-    org_id = cur.lastrowid
-    cur.execute(f'SELECT id FROM signup_forms WHERE org_name=\'{org_name}\'')
-    row = cur.fetchone()
-    if row is not None:
-      signup_form_id = row[0]
-      cur.execute(f'DELETE FROM signup_forms WHERE id={signup_form_id}')
-    conn.commit()
+  # with conn.cursor() as cur:
+  #   cur.execute(f'INSERT INTO `organizations` (`name`, max_users, max_concurrent_users, is_deleted) VALUES (\'{org_name}\', 50, 5, 0)')
+  #   org_id = cur.lastrowid
+  #   cur.execute(f'SELECT id FROM signup_forms WHERE org_name=\'{org_name}\'')
+  #   row = cur.fetchone()
+  #   if row is not None:
+  #     signup_form_id = row[0]
+  #     cur.execute(f'DELETE FROM signup_forms WHERE id={signup_form_id}')
+  #   conn.commit()
    
-  client = boto3.client('cognito-idp')
-  userpool_id = os.environ.get('up_id')
+  # client = boto3.client('cognito-idp')
+  # userpool_id = os.environ.get('up_id')
   
-  response = client.admin_create_user(
-    UserPoolId=userpool_id,
-    Username=email,
-    UserAttributes=[
-      {
-        'Name': 'email',
-        'Value': email
-      },
-      {
-        'Name': 'custom:org_id',
-        'Value': str(org_id)
-      }
-    ]
-  )
+  # response = client.admin_create_user(
+  #   UserPoolId=userpool_id,
+  #   Username=email,
+  #   UserAttributes=[
+  #     {
+  #       'Name': 'email',
+  #       'Value': email
+  #     },
+  #     {
+  #       'Name': 'custom:org_id',
+  #       'Value': str(org_id)
+  #     }
+  #   ]
+  # )
 
-  response = client.admin_add_user_to_group(
-    UserPoolId=userpool_id,
-    Username=response['User']['Username'],
-    GroupName='OrgAdmin'
-  )
+  # response = client.admin_add_user_to_group(
+  #   UserPoolId=userpool_id,
+  #   Username=response['User']['Username'],
+  #   GroupName='OrgAdmin'
+  # )
 
-  print(response)
+  # print(response)
